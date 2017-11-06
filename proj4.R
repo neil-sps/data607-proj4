@@ -1,0 +1,106 @@
+# install.packages("stringr")
+# install.packages("tm")
+# install.packages("qdap")
+# install.packages('rJava')
+# install.packages('plyr')
+# install.packages('knitr')
+# install.packages('tidyverse')
+library(tidyverse)
+library(rJava)
+library(tm)
+library(qdap)
+library(stringr)
+library(plyr)
+library(knitr)
+
+spams <- list.files("C:/Users/neilhwang/Downloads/spam/", full.names = TRUE)
+hams <- list.files("C:/Users/neilhwang/Downloads/easy_ham/", full.names = TRUE)
+
+df_names <- c('expression', 'context', 'count', 'classification')
+
+run_experiment <- function(test_file){
+  ham_count = 0
+  spam_count = 0
+  
+  for (i in 1:length(test_file)){
+    if (test_file[i] != 'NA'){
+      if (spam_likelihood(test_file[i]) == 'spam'){
+        spam_count = spam_count + 1
+      } else {
+        ham_count = ham_count + 1
+      }
+    }
+  }
+  print(spam_count)
+  print(ham_count)
+}
+
+
+spam_likelihood <- function(file_path){
+  content <- readLines(file_path)
+  temp <- paste(content, collapse = ' ')
+  terms <- strsplit(temp, "\\W+")
+  dfx <- data.frame(terms)
+  colnames(dfx) <- "danuh"
+  dfx$danuh <- tolower(dfx$danuh)
+  total_score <- sum(combined$score[dfx$danuh == combined$expression])
+  if(!is.na(total_score)){
+    if (total_score > 0){
+      return('spam')
+    } else {
+      return('ham')  
+    }
+  } else {
+    return('spam')
+  }
+}
+
+
+append_tm <- function(path_files){
+  temp_content = c()
+  i <- 0
+  for (cur_file in path_files){
+    current_content <- readLines(cur_file)
+    temp_content <- c(temp_content, current_content)
+    i <- (i+1)
+    if (i == 50){
+      return(Corpus(VectorSource(temp_content)))
+    }
+  }
+  return (Corpus(VectorSource(temp_content)))
+}
+
+spam <- append_tm(spams)
+ham <- append_tm(hams)
+
+control_tdm <- list(removePunctuation=TRUE, removeNumbers=TRUE, stripWhitespace=TRUE)
+spam_df <- data.frame(as.table(TermDocumentMatrix(spam, control = control_tdm)))
+ham_df <- data.frame(as.table(TermDocumentMatrix(ham, control = control_tdm)))
+spam_df[['category']] <- "spam"
+ham_df[['category']] <- "ham"
+
+colnames(spam_df) <- df_names
+colnames(ham_df)  <- df_names
+spam_df$count[is.na(spam_df$count)] <- '0'
+spam_df <- spam_df %>% 
+  ddply(.(expression, classification), summarize, count = sum(as.numeric(count)))
+
+ham_df$count[is.na(ham_df$count)] <- '0'
+ham_df <- ham_df %>% 
+  ddply(.(expression, classification), summarize, count = sum(as.numeric(count)))
+
+combined <- merge(x = ham_df, y = spam_df, by=c("expression", "count", "classification"), all = TRUE)
+combined$count[is.na(combined$count)] <- '0'
+combined$classification[is.na(combined$classification)] <- 'spam'
+combined$count[is.na(combined$count)] <- '0'
+combined$classification[is.na(combined$classification)] <- 'ham'
+combined[is.na(combined)] <- '0'
+combined$score <- as.numeric(combined$count) - as.numeric(combined$count)
+
+spams_test <- list.files("C:/Users/neilhwang/Downloads/spam_2/", full.names = TRUE)
+hams_test <- list.files("C:/Users/neilhwang/Downloads/easy_ham_2/", full.names = TRUE)
+ham_count = 0
+spam_count = 0
+
+run_experiment(hams_test)
+run_experiment(spams_test)
